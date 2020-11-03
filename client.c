@@ -75,7 +75,7 @@ int main( int argc, char *argv[]){
     FILE *inputFile = fopen(inputFileName, "r");
     char dirName[MAX_DIR_PATH], word[MAX_KEYWORD];
 
-    while(fscanf(inputFile, "%s %s", dirName, word) != EOF){
+    while(fscanf(inputFile, "%s", dirName) != EOF){
         if(sem_wait(count) == -1){
             printf("Error waiting on count\n");
             return 0;
@@ -86,11 +86,16 @@ int main( int argc, char *argv[]){
             return 0;
         }
 
-        printf("Input is %s %s with index %d\n", dirName, word, queue->endIndex);
-        
-        sprintf(queue->keywords[queue->endIndex], "%s %s", dirName, word);
-        queue->endIndex = ((queue->endIndex) + 1) % requiredQueueSize;
-
+        if(strcmp(dirName, "exit") == 0){
+            sprintf(queue->keywords[queue->endIndex], "%s", dirName);
+            printf("Exit found\n");
+        }
+        else{
+            fscanf(inputFile, "%s ", word);
+            sprintf(queue->keywords[queue->endIndex], "%s %s", dirName, word);
+            queue->endIndex = ((queue->endIndex) + 1) % requiredQueueSize;
+            printf("Input is %s %s with index %d\n", dirName, word, queue->endIndex);
+        }
         if(sem_post(mutex) == -1){
             printf("Error posting mutex\n");
             return 0;
