@@ -297,7 +297,12 @@ void *write_file(void* argument) {
     
     arg *args = (struct arg *)argument;
 
-    // TODO if it is empty this bad boy needs to wait
+
+    if(sem_wait(args->threadEmpty) == SEM_FAILED)
+        perror("Waiting for not empty failed\n");
+
+    if(sem_wait(args->threadMutex) == SEM_FAILED)
+        perror("Waiting on thread mutex failed");
 
     item *i = dequeue(args->b);
 
@@ -308,6 +313,12 @@ void *write_file(void* argument) {
     outFile = fopen("output.txt", "w+");
 
     fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
+
+    if(sem_post(args->threadFull) == SEM_FAILED)
+        perror("posting thread full failed");
+
+    if(sem_post(args->threadMutex) == SEM_FAILED)
+        perror("posting thread mutex failed");
 
 
 }
