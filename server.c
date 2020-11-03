@@ -52,10 +52,8 @@ typedef struct Argument {
     sem_t *threadFull;
     sem_t *threadEmpty;
     int *integ;
+    int bufferSize;
 } arg;
-
-// definition of the get_items function used to find the word in the files
-item* get_items(char[], char[], int);
 
 int main( int argc, char *argv[]){
     if(argc != 3){
@@ -169,7 +167,8 @@ int main( int argc, char *argv[]){
 
 // get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSize) {
+void *get_items(void* argument) {
+    arg *args = (struct arg *)argument;
 
     int *integ =0;
 
@@ -194,12 +193,12 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
         return;
     }
 
-    if((sem_init(full, 0, bufferSize)) == SEM_FAILED){
+    if((sem_init(full, 0, args->bufferSize)) == SEM_FAILED){
         perror("Initiating full failed\n");
     }
 
      // checks if directory can open
-    if ((dir = opendir(filePath)) == NULL)
+    if ((dir = opendir(args->filePath)) == NULL)
         perror("could not open directory");
 
 
@@ -210,7 +209,7 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
 
             //puts the path together
             char path[1000];
-            strcpy(path, filePath);
+            strcpy(path, args->filePath);
             strcat(path, "/");
             strcat(path, entry->d_name);
 
@@ -222,8 +221,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
                     arg * new_arg;
                     new_arg = (arg *) malloc(sizeof(arg));
                     new_arg->entry = entry;
-                    new_arg->filePath = filePath;
-                    new_arg->key = key;
+                    new_arg->filePath = args->filePath;
+                    new_arg->key = args->key;
                     new_arg->b = b;
                     new_arg->threadMutex = writerMutex;
                     new_arg->threadFull = full;
