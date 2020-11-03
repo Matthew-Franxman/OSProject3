@@ -21,6 +21,7 @@
 #define SEM_MUTEX "/sem_mutex"
 #define SEM_COUNT "/sem_count"
 #define SEM_INDICATOR "/sem_indicator"
+#define SEM_WRITE "/sem_write"
 
 #define MEMORY_NAME "/queue_of_keywords"
 
@@ -51,6 +52,7 @@ typedef struct Argument {
     sem_t *threadMutex;
     sem_t *threadFull;
     sem_t *threadEmpty;
+    sem_t *totalWrite;
     int *integ;
     int bufferSize;
 } arg;
@@ -67,7 +69,7 @@ int main( int argc, char *argv[]){
 
 
     struct readyQueue *queue;
-    sem_t *mutex, *count, *indicator;
+    sem_t *mutex, *count, *indicator, *writeFile;
     int sharedMemory;
     char str[MAX_DIR_PATH+MAX_KEYWORD+4];
 
@@ -112,6 +114,9 @@ int main( int argc, char *argv[]){
         printf("Error opening indicator\n");
         return 0;
     }
+
+    if((writeFile = sem_open(SEM_WRITE, O_CREAT, 0666, 1)) == SEM_FAILED)
+        perror("Error opening writeFile indicator\n");
 
     //release mutex once initialization is complete
     if(sem_post(mutex) == -1)
@@ -307,6 +312,15 @@ void *write_file(void* argument) {
 
     while(args->integ != 0 && dequeue(args->b) != NULL) {
 
+        if(sem_wait(args->threadEmpty) == SEM_FAILED)
+            perror("Waiting for not empty failed\n");
+
+        if(sem_wait(args->threadMutex) == SEM_FAILED)
+            perror("Waiting on thread mutex failed");
+
+        if(sem_wait(args->totalWrite) == SEM_FAILED)
+            perror("Waiting on total write failed\n");
+
         item *i = dequeue(args->b);
 
         char sentence[MAX_OUT_SIZE];
@@ -322,6 +336,9 @@ void *write_file(void* argument) {
 
         if(sem_post(args->threadMutex) == SEM_FAILED)
             perror("posting thread mutex failed");
+
+        if(sem_post(args->totalWrite) == SEM_FAILED)
+            perror("posting total write failed");
 
     }
 
