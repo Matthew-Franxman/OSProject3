@@ -247,7 +247,6 @@ void *find_lines(void* argument) {
             i->lineNum = lineNum;
             i->line = strdup(line);
             
-        // TODO ADD SEMAPHORE HERE TO SEE IF BUFFER IS AT MAX CAPACITY
             if(sem_wait(args->threadMutex) == SEM_FAILED){
                 perror("Waiting on threadMutex failed\n");
             }
@@ -269,6 +268,25 @@ void *find_lines(void* argument) {
             
         }
     }
+}
+
+void *write_file(void* argument) {
+    
+    buffer * b = (buffer *)argument;
+
+    // TODO if it is empty this bad boy needs to wait
+
+    item *i = dequeue(b);
+
+    char sentence[MAX_OUT_SIZE];
+
+    FILE *outFile;
+
+    outFile = fopen("output.txt", "w+");
+
+    fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
+
+
 }
 
 // equeue adds an entry to the back of the buffer
