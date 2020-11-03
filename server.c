@@ -49,6 +49,7 @@ typedef struct Argument {
     char *key;
     buffer *b;
     sem_t *threadMutex;
+    sem_t *threadFull;
     sem_t *threadEmpty;
 } arg;
 
@@ -161,14 +162,18 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
 
     sem_t *writerMutex, *empty, *full;
 
-    if((sem_init(writerMutex, 0, 0)) == -1){
+    if((sem_init(writerMutex, 0, 0)) == SEM_FAILED){
         perror("Initiating writerMutex failed\n");
         return;
     }
 
-    if((sem_init(empty, 0, 0)) == -1){
+    if((sem_init(empty, 0, 0)) == SEM_FAILED){
         perror("Initializing empty failed\n");
         return;
+    }
+
+    if((sem_init(full, 0, bufferSize)) == SEM_FAILED){
+        perror("Initiating full failed\n");
     }
 
      // checks if directory can open
@@ -199,8 +204,9 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
                     new_arg->key = key;
                     new_arg->b = b;
                     new_arg->threadMutex = writerMutex;
+                    new_arg->threadFull = full;
                     new_arg->threadEmpty = empty;
-                    
+
                     pthread_t tpid;
                     pthread_create(&tpid, NULL, find_lines, &new_arg);
                 }
@@ -241,8 +247,25 @@ void *find_lines(void* argument) {
             i->line = strdup(line);
             
         // TODO ADD SEMAPHORE HERE TO SEE IF BUFFER IS AT MAX CAPACITY
-        enqueue(args->b, i);
+            if(sem_wait(args->threadMutex) == SEM_FAILED){
+                perror("Waiting on threadMutex failed\n");
+            }
 
+            if(sem_wait(args->threadFull) == SEM_FAILED){
+                perror("Waiting on threadFull failed\n");
+            }
+
+            enqueue(args->b, i);
+
+            if(sem_post(args->threadEmpty) == SEM_FAILED){
+                perror("Posting threadEmpty failed\n");
+            }
+
+            if(sem_post(args->threadMutex) == SEM_FAILED){
+                perror("Posting threadMutex failed\n");
+            }
+
+            
         }
     }
 }
