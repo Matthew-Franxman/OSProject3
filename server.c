@@ -244,7 +244,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
         pthread_t wpid;
         pthread_create(&wpid, NULL, write_file, &new_arg);
 
-        // TODO here we would need to join the writer thread back to the function and end the process
+        pthread_join(wpid, NULL);
+
     }
 
     free(integ);
@@ -305,13 +306,6 @@ void *write_file(void* argument) {
     
     arg *args = (struct arg *)argument;
 
-
-    if(sem_wait(args->threadEmpty) == SEM_FAILED)
-        perror("Waiting for not empty failed\n");
-
-    if(sem_wait(args->threadMutex) == SEM_FAILED)
-        perror("Waiting on thread mutex failed");
-
     while(args->integ != 0 && dequeue(args->b) != NULL) {
 
         item *i = dequeue(args->b);
@@ -324,18 +318,14 @@ void *write_file(void* argument) {
 
         fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
 
-<<<<<<< HEAD
+        if(sem_post(args->threadFull) == SEM_FAILED)
+            perror("posting thread full failed");
+
+        if(sem_post(args->threadMutex) == SEM_FAILED)
+            perror("posting thread mutex failed");
+
     }
 
-    free(args);
-=======
-    if(sem_post(args->threadFull) == SEM_FAILED)
-        perror("posting thread full failed");
-
-    if(sem_post(args->threadMutex) == SEM_FAILED)
-        perror("posting thread mutex failed");
-
->>>>>>> 19c91d1de51bc7a617b6c9a8bc22ac523a8f0b73
 
 }
 
