@@ -105,6 +105,16 @@ int main( int argc, char *argv[]){
             printf("Error unmapping memory\n");
             return 0;
         }
+    
+    if(sem_close(mutex) == -1)
+        perror("error closing mutex");
+
+    if(sem_close(count) == -1)
+        perror("error closing count");
+
+    if(sem_close(indicator) == -1)
+        perror("error closing indicator");
+    
 
     return 0;
 }
