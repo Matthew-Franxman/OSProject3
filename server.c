@@ -185,7 +185,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
 
         }
 
-        // TODO here i need to create a new writer thread that writes the solutions to the file
+        pthread_t wpid;
+        pthread_create(&wpid, NULL, write_file, &b);
 
         // TODO here we would need to join the writer thread back to the function and end the process
     }
