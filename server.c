@@ -140,9 +140,19 @@ int main( int argc, char *argv[]){
         if(sem_post(count) == -1)
             perror("Error posting count\n");
             
-        
+        arg * new_arg;
+        new_arg = (arg *) malloc(sizeof(arg));
 
-        printf("The string passed was %s\n", str);
+        char delim[] = " ";
+        char *ptr1 = strtok(str, delim);
+        char *ptr2 = strtok(NULL, delim);
+        new_arg->filePath = ptr1;
+        new_arg->key= ptr2;
+        new_arg->bufferSize = bufferSize;
+
+        pthread_t tid;
+        pthread_create(tid, NULL, get_items, new_arg);
+
     }
 
     if(sem_close(mutex) == -1)
@@ -254,6 +264,7 @@ void *get_items(void* argument) {
 
     free(integ);
     free(b);
+    free(args);
 }
 
 void *find_lines(void* argument) {
