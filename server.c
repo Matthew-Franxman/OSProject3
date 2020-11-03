@@ -151,6 +151,9 @@ int main( int argc, char *argv[]){
         char delim[] = " ";
         char *ptr1 = strtok(str, delim);
         char *ptr2 = strtok(NULL, delim);
+        printf("Filepath is %s\n", ptr1);
+        printf("keyword is %s\n", ptr2);
+
         new_arg->filePath = ptr1;
         new_arg->key= ptr2;
         new_arg->bufferSize = bufferSize;
@@ -202,16 +205,16 @@ void get_items(void* argument) {
     struct stat stats;
 
     sem_t *writerMutex, *empty, *full;
+    writerMutex = malloc(sizeof(sem_t));
+    empty = malloc(sizeof(sem_t));
+    full = malloc(sizeof(sem_t));
 
-    if((sem_init(writerMutex, 0, 0)) == -1){
+    if((sem_init(writerMutex, 0, 0)) == -1)
         perror("Initiating writerMutex failed\n");
-        return;
-    }
 
-    if((sem_init(empty, 0, 0)) == -1){
+    if((sem_init(empty, 0, 0)) == -1)
         perror("Initializing empty failed\n");
-        return;
-    }
+        
 
     if((sem_init(full, 0, args->bufferSize)) == -1){
         perror("Initiating full failed\n");
