@@ -11,6 +11,7 @@
 #include <error.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #define MAX_DIR_PATH 1024
 #define MAX_KEYWORD 256
@@ -31,18 +32,18 @@ struct readyQueue{
     int endIndex;
 };
 
-typedef struct Buffer {
-    item *head;
-    item *tail;
-    int size;
-} buffer;
-
 typedef struct Item {
     char *filename;
     int lineNum;
     char *line;
     struct Item *next;
 } item;
+
+typedef struct Buffer {
+    item *head;
+    item *tail;
+    int size;
+} buffer;
 
 typedef struct Argument {
     struct dirent *entry;
@@ -86,10 +87,7 @@ int main( int argc, char *argv[]){
     }
 
     //set shared memory size
-     item *initial_item = NULL;
-
-    item buffer;
-    int bufferSize;   if( ftruncate(sharedMemory, sizeof(struct readyQueue)) == -1){
+    if( ftruncate(sharedMemory, sizeof(struct readyQueue)) == -1){
         printf("Error truncating memory %d\n", errno);
         perror("Error printed by perror: ");
         return 0;
@@ -151,7 +149,7 @@ int main( int argc, char *argv[]){
         new_arg->bufferSize = bufferSize;
 
         pthread_t tid;
-        pthread_create(tid, NULL, get_items, new_arg);
+        pthread_create(&tid, NULL, get_items, new_arg);
 
     }
 
@@ -182,8 +180,8 @@ int main( int argc, char *argv[]){
 
 // get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-void *get_items(void* argument) {
-    arg *args = (struct arg *)argument;
+void get_items(void* argument) {
+    arg *args = (struct Argument *)argument;
 
     int *integ =0;
 
@@ -198,17 +196,17 @@ void *get_items(void* argument) {
 
     sem_t *writerMutex, *empty, *full;
 
-    if((sem_init(writerMutex, 0, 0)) == SEM_FAILED){
+    if((sem_init(writerMutex, 0, 0)) == -1){
         perror("Initiating writerMutex failed\n");
         return;
     }
 
-    if((sem_init(empty, 0, 0)) == SEM_FAILED){
+    if((sem_init(empty, 0, 0)) == -1){
         perror("Initializing empty failed\n");
         return;
     }
 
-    if((sem_init(full, 0, args->bufferSize)) == SEM_FAILED){
+    if((sem_init(full, 0, args->bufferSize)) == -1){
         perror("Initiating full failed\n");
     }
 
@@ -267,8 +265,8 @@ void *get_items(void* argument) {
     free(args);
 }
 
-void *find_lines(void* argument) {
-    arg *args = (struct arg *)argument;
+void find_lines(void* argument) {
+    arg *args = (struct Argument *)argument;
 
     char path[MAX_DIR_PATH];
     strcpy(path, args->filePath);
@@ -280,7 +278,7 @@ void *find_lines(void* argument) {
     fp = fopen(path, "r+");
 
     int lineNum = 0;
-    while (fgets(line, MAX_LINE_SIZE, (FILE*)fp) != EOF) {
+    while (fgets(line, MAX_LINE_SIZE, (FILE*)fp) != NULL) {
         lineNum++;
         char *ptr = strstr(line, args->key);
 
@@ -292,21 +290,21 @@ void *find_lines(void* argument) {
             i->lineNum = lineNum;
             i->line = strdup(line);
             
-            if(sem_wait(args->threadMutex) == SEM_FAILED){
+            if(sem_wait(args->threadMutex) == -1){
                 perror("Waiting on threadMutex failed\n");
             }
 
-            if(sem_wait(args->threadFull) == SEM_FAILED){
+            if(sem_wait(args->threadFull) == -1){
                 perror("Waiting on threadFull failed\n");
             }
 
             enqueue(args->b, i);
 
-            if(sem_post(args->threadEmpty) == SEM_FAILED){
+            if(sem_post(args->threadEmpty) == -1){
                 perror("Posting threadEmpty failed\n");
             }
 
-            if(sem_post(args->threadMutex) == SEM_FAILED){
+            if(sem_post(args->threadMutex) == -1){
                 perror("Posting threadMutex failed\n");
             }
 
@@ -317,24 +315,22 @@ void *find_lines(void* argument) {
     free(args);
 }
 
-void *write_file(void* argument) {
+void write_file(void* argument) {
     
-    arg *args = (struct arg *)argument;
+    arg *args = (struct Argument *)argument;
 
     while(args->integ != 0 && dequeue(args->b) != NULL) {
 
-        if(sem_wait(args->threadEmpty) == SEM_FAILED)
+        if(sem_wait(args->threadEmpty) == -1)
             perror("Waiting for not empty failed\n");
 
-        if(sem_wait(args->threadMutex) == SEM_FAILED)
+        if(sem_wait(args->threadMutex) == -1)
             perror("Waiting on thread mutex failed");
 
-        if(sem_wait(args->totalWrite) == SEM_FAILED)
+        if(sem_wait(args->totalWrite) == -1)
             perror("Waiting on total write failed\n");
 
         item *i = dequeue(args->b);
-
-        char sentence[MAX_OUT_SIZE];
 
         FILE *outFile;
 
@@ -342,18 +338,16 @@ void *write_file(void* argument) {
 
         fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
 
-        if(sem_post(args->threadFull) == SEM_FAILED)
+        if(sem_post(args->threadFull) == -1)
             perror("posting thread full failed");
 
-        if(sem_post(args->threadMutex) == SEM_FAILED)
+        if(sem_post(args->threadMutex) == -1)
             perror("posting thread mutex failed");
 
-        if(sem_post(args->totalWrite) == SEM_FAILED)
+        if(sem_post(args->totalWrite) == -1)
             perror("posting total write failed");
 
     }
-
-
 }
 
 // equeue adds an entry to the back of the buffer
