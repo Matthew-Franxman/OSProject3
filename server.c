@@ -232,9 +232,12 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
             }
 
         }
+        arg * new_arg;
+        new_arg = (arg *) malloc(sizeof(arg));
+        new_arg->b = b;
 
         pthread_t wpid;
-        pthread_create(&wpid, NULL, write_file, &b);
+        pthread_create(&wpid, NULL, write_file, &new_arg);
 
         // TODO here we would need to join the writer thread back to the function and end the process
     }
@@ -242,7 +245,7 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
 }
 
 void *find_lines(void* argument) {
-    arg *args = (struct args *)argument;
+    arg *args = (struct arg *)argument;
 
     char path[MAX_DIR_PATH];
     strcpy(path, args->filePath);
@@ -287,15 +290,16 @@ void *find_lines(void* argument) {
             
         }
     }
+    free(args);
 }
 
 void *write_file(void* argument) {
     
-    buffer * b = (buffer *)argument;
+    arg *args = (struct arg *)argument;
 
     // TODO if it is empty this bad boy needs to wait
 
-    item *i = dequeue(b);
+    item *i = dequeue(args->b);
 
     char sentence[MAX_OUT_SIZE];
 
