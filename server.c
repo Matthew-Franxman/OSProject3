@@ -115,19 +115,16 @@ int main( int argc, char *argv[]){
     }
 
     //release mutex once initialization is complete
-    if(sem_post(mutex) == -1){
-        printf("Error posting mutex\n");
-        return 0;
-    }
+    if(sem_post(mutex) == -1)
+        perror("Error posting mutex\n");
+    
 
     bool notExit = true;
     char *ptr;
 
     while(notExit){
-        if(sem_wait(indicator) == -1){
-            printf("Error waiting for indicator\n");
-            return 0;
-        }
+        if(sem_wait(indicator) == -1)
+            perror("Error waiting for indicator\n");
 
         strcpy(str, queue->keywords[queue->startIndex]);
         queue->startIndex = (queue->startIndex + 1) % requiredQueueSize;
@@ -136,14 +133,36 @@ int main( int argc, char *argv[]){
         if(ptr != NULL){
             notExit = true;
         }
-        if(sem_post(count) == -1){
-            printf("Error posting count\n");
-            return 0;
-        }
+        if(sem_post(count) == -1)
+            perror("Error posting count\n");
+            
+        
 
         printf("The string passed was %s\n", str);
     }
 
+    if(sem_close(mutex) == -1)
+        perror("error closing mutex");
+
+    if(sem_close(count) == -1)
+        perror("error closing count");
+
+    if(sem_close(indicator) == -1)
+        perror("error closing indicator");
+
+    if(sem_unlink(SEM_MUTEX) == -1)
+        perror("error unlinking mutex");
+
+    if(sem_unlink(SEM_COUNT) == -1)
+        perror("error unlinking count");
+
+    if(sem_unlink(SEM_INDICATOR) == -1)
+        perror("error unlinking indicator");
+
+    if(shm_unlink(MEMORY_NAME) == -1)
+        perror("error unlinking shared memory");
+
+    
     return 0;
 }
 
