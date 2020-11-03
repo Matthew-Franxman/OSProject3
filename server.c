@@ -57,6 +57,13 @@ typedef struct Argument {
     int bufferSize;
 } arg;
 
+void get_items(void* argument);
+void find_lines(void* argument);
+void write_file(void* argument);
+void enqueue(buffer *b, item *i);
+item* dequeue(buffer *b);
+int isEmpty(buffer *b);
+
 int main( int argc, char *argv[]){
     if(argc != 3){
         printf("Invalid Command Line Arguments");
@@ -182,7 +189,7 @@ int main( int argc, char *argv[]){
 
 // get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-void *get_items(void* argument) {
+void get_items(void* argument) {
     arg *args = (struct arg *)argument;
 
     int *integ =0;
@@ -267,7 +274,7 @@ void *get_items(void* argument) {
     free(args);
 }
 
-void *find_lines(void* argument) {
+void find_lines(void* argument) {
     arg *args = (struct arg *)argument;
 
     char path[MAX_DIR_PATH];
@@ -317,7 +324,7 @@ void *find_lines(void* argument) {
     free(args);
 }
 
-void *write_file(void* argument) {
+void write_file(void* argument) {
     
     arg *args = (struct arg *)argument;
 
