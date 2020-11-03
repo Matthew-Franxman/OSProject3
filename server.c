@@ -156,6 +156,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD]) {
         return;
     }
 
+    
+
      // checks if directory can open
     if ((dir = opendir(filePath)) == NULL)
         perror("could not open directory");
