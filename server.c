@@ -29,6 +29,11 @@ struct readyQueue{
     int endIndex;
 };
 
+typedef struct Buffer {
+    item *head;
+    item *tail;
+    int size;
+} buffer;
 
 typedef struct Item {
     char *filename;
@@ -41,10 +46,11 @@ typedef struct Argument {
     struct dirent *entry;
     char *filePath;
     char *key;
+    buffer *b;
 } arg;
 
 // definition of the get_items function used to find the word in the files
-item* get_items(char[], char[]);
+item* get_items(char[], char[], int);
 
 int main( int argc, char *argv[]){
     if(argc != 3){
@@ -55,6 +61,7 @@ int main( int argc, char *argv[]){
     char *temp = argv[1];
     int requiredQueueSize = atoi(temp);
     int bufferSize = *argv[2];
+
 
     struct readyQueue *queue;
     sem_t *mutex, *count, *indicator;
@@ -74,7 +81,10 @@ int main( int argc, char *argv[]){
     }
 
     //set shared memory size
-    if( ftruncate(sharedMemory, sizeof(struct readyQueue)) == -1){
+     item *initial_item = NULL;
+
+    item buffer;
+    int bufferSize;   if( ftruncate(sharedMemory, sizeof(struct readyQueue)) == -1){
         printf("Error truncating memory %d\n", errno);
         perror("Error printed by perror: ");
         return 0;
@@ -128,8 +138,11 @@ int main( int argc, char *argv[]){
 
 // get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD]) {
-    item *initial_item = NULL;
+item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSize) {
+
+    buffer *b;
+    b = (buffer *) malloc(sizeof(buffer));
+    
 
     // file stuctures native to c
     DIR *dir;
@@ -146,26 +159,41 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD]) {
         // finds different entries in the directory
         while ((entry = readdir(dir)) != NULL){
 
-            arg * new_arg;
-            new_arg = (arg *) malloc(sizeof(arg));
-            new_arg->entry = entry;
-            new_arg->filePath = filePath;
-            new_arg->key = key;
-            
-            pthread_t tpid;
-            pthread_create(&tpid, NULL, find_lines, &new_arg);
+            //puts the path together
+            char path[1000];
+            strcpy(path, filePath);
+            strcat(path, "/");
+            strcat(path, entry->d_name);
+
+            if (stat(path, &stats) == -1)
+                continue;
+            else {
+                // if its a normal file
+                if (S_ISREG (stats.st_mode)){
+                    arg * new_arg;
+                    new_arg = (arg *) malloc(sizeof(arg));
+                    new_arg->entry = entry;
+                    new_arg->filePath = filePath;
+                    new_arg->key = key;
+                    new_arg->b = b;
+
+                    
+                    pthread_t tpid;
+                    pthread_create(&tpid, NULL, find_lines, &new_arg);
+                }
+            }
 
         }
 
-        // here i need to create a new writer thread that writes the solutions to the file
+        // TODO here i need to create a new writer thread that writes the solutions to the file
 
-        //here we would need to join the writer thread back to the function and end the process
+        // TODO here we would need to join the writer thread back to the function and end the process
     }
 
 }
 
 void *find_lines(void* argument) {
-    arg *args = (struct dirent *)argument;
+    arg *args = (struct args *)argument;
 
     char path[MAX_DIR_PATH];
     strcpy(path, args->filePath);
@@ -188,10 +216,44 @@ void *find_lines(void* argument) {
             i->filename = strdup(args->entry->d_name);
             i->lineNum = lineNum;
             i->line = strdup(line);
-
-
-// somehow i need to add these items to a shared buffer, not sure how i do that tho
+            
+        // TODO ADD SEMAPHORE HERE TO SEE IF BUFFER IS AT MAX CAPACITY
+        enqueue(args->b, i);
 
         }
     }
+}
+
+// equeue adds an entry to the back of the buffer
+void enqueue(buffer *b, item *i){
+  if (isEmpty(b)){
+    b->head = i;
+    b->tail = i;
+  }
+  else {
+    b->tail->next = i;
+    b->tail = i;
+  }
+  b->size = b->size +1;
+}
+
+// dequeue pops the front item off of the buffer
+// and makes the next item the head
+item* dequeue(buffer *b) {
+
+  if (isEmpty(b))
+    return NULL;
+
+  item *tmp;
+  tmp = b->head;
+  if (b->head != b->tail)
+    b->head = b->head->next;
+  b->size = b->size -1; 
+
+  return tmp;
+}
+
+// isEmpty checks to see if the buffer is empty
+int isEmpty(buffer *b){
+  return (b->size == 0);
 }
