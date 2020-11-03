@@ -31,8 +31,14 @@ typedef struct Item {
     struct Item *next;
 } item;
 
-// definition of the find_line function used to find the word in the files
-item* find_line(char*, char*);
+typedef struct Argument {
+    struct dirent *entry;
+    char *filePath;
+    char *key;
+} arg;
+
+// definition of the get_items function used to find the word in the files
+item* get_items(char[], char[]);
 
 int main( int argc, char *argv[]){
     if(argc != 3){
@@ -81,10 +87,10 @@ int main( int argc, char *argv[]){
     return 0;
 }
 
-// find_line finds when a string is found within a line and creates the respective items
+// get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-item* find_line(char *filePath, char *key) {
-    item* *initial_item = NULL;
+item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD]) {
+    item *initial_item = NULL;
 
     // file stuctures native to c
     DIR *dir;
@@ -97,44 +103,56 @@ item* find_line(char *filePath, char *key) {
 
 
     else {
-        item *last_item = NULL;
         
         // finds different entries in the directory
         while ((entry = readdir(dir)) != NULL){
-            char path[1000];
-            strcpy(path, filePath);
-            strcat(path, "/");
-            strcat(path, entry->d_name);
 
-            FILE *fp;
-            char line[1024];
-            fp = fopen(path, "r+");
+            arg * new_arg;
+            new_arg = (arg *) malloc(sizeof(arg));
+            new_arg->entry = entry;
+            new_arg->filePath = filePath;
+            new_arg->key = key;
+            
+            pthread_t tpid;
+            pthread_create(&tpid, NULL, find_lines, &new_arg);
 
-            int lineNum = 0;
-            while (fgets(line, 1024, (FILE*)fp) != EOF) {
-                lineNum++;
-                char *ptr = strstr(line, key);
-
-                if (ptr != NULL) { // the string is found within the line
-                    // creation of the new item
-                    item *i = NULL;
-                    i = (item *) malloc(sizeof(item));
-                    i->filename = strdup(entry->d_name);
-                    i->lineNum = lineNum;
-                    i->line = strdup(line);
-
-                    // link it to the node in front
-                    if (last_item != NULL) {
-                        last_item->next = i;
-                    }
-                    else {
-                        initial_item = i;
-                    }
-                    last_item = i;
-                }
-            }
         }
+
+        // here i need to create a new writer thread that writes the solutions to the file
+
+        //here we would need to join the writer thread back to the function and end the process
     }
 
-    return initial_item;
+}
+
+void *find_lines(void* argument) {
+    arg *args = (struct dirent *)argument;
+
+    char path[MAX_DIR_PATH];
+    strcpy(path, args->filePath);
+    strcat(path, "/");
+    strcat(path, args->entry->d_name);
+
+    FILE *fp;
+    char line[1024];
+    fp = fopen(path, "r+");
+
+    int lineNum = 0;
+    while (fgets(line, MAX_LINE_SIZE, (FILE*)fp) != EOF) {
+        lineNum++;
+        char *ptr = strstr(line, args->key);
+
+        if (ptr != NULL) { // the string is found within the line
+            // creation of the new item
+            item *i = NULL;
+            i = (item *) malloc(sizeof(item));
+            i->filename = strdup(args->entry->d_name);
+            i->lineNum = lineNum;
+            i->line = strdup(line);
+
+
+// somehow i need to add these items to a shared buffer, not sure how i do that tho
+
+        }
+    }
 }
