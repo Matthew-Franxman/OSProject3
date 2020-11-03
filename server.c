@@ -51,6 +51,7 @@ typedef struct Argument {
     sem_t *threadMutex;
     sem_t *threadFull;
     sem_t *threadEmpty;
+    int *integ;
 } arg;
 
 // definition of the get_items function used to find the word in the files
@@ -170,6 +171,8 @@ int main( int argc, char *argv[]){
 // returning the first item
 item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSize) {
 
+    int *integ =0;
+
     buffer *b;
     b = (buffer *) malloc(sizeof(buffer));
     
@@ -225,6 +228,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
                     new_arg->threadMutex = writerMutex;
                     new_arg->threadFull = full;
                     new_arg->threadEmpty = empty;
+                    new_arg->integ = integ;
+                    integ++;
 
                     pthread_t tpid;
                     pthread_create(&tpid, NULL, find_lines, &new_arg);
@@ -242,6 +247,8 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
         // TODO here we would need to join the writer thread back to the function and end the process
     }
 
+    free(integ);
+    free(b);
 }
 
 void *find_lines(void* argument) {
@@ -290,6 +297,7 @@ void *find_lines(void* argument) {
             
         }
     }
+    args->integ--;
     free(args);
 }
 
@@ -304,22 +312,30 @@ void *write_file(void* argument) {
     if(sem_wait(args->threadMutex) == SEM_FAILED)
         perror("Waiting on thread mutex failed");
 
-    item *i = dequeue(args->b);
+    while(args->integ != 0 && dequeue(args->b) != NULL) {
 
-    char sentence[MAX_OUT_SIZE];
+        item *i = dequeue(args->b);
 
-    FILE *outFile;
+        char sentence[MAX_OUT_SIZE];
 
-    outFile = fopen("output.txt", "w+");
+        FILE *outFile;
 
-    fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
+        outFile = fopen("output.txt", "w+");
 
+        fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
+
+<<<<<<< HEAD
+    }
+
+    free(args);
+=======
     if(sem_post(args->threadFull) == SEM_FAILED)
         perror("posting thread full failed");
 
     if(sem_post(args->threadMutex) == SEM_FAILED)
         perror("posting thread mutex failed");
 
+>>>>>>> 19c91d1de51bc7a617b6c9a8bc22ac523a8f0b73
 
 }
 
