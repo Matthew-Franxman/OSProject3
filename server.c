@@ -10,6 +10,7 @@
 #include <string.h>
 #include <error.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #define MAX_DIR_PATH 1024
 #define MAX_KEYWORD 256
@@ -47,6 +48,9 @@ typedef struct Argument {
     char *filePath;
     char *key;
     buffer *b;
+    sem_t *threadMutex;
+    sem_t *threadFull;
+    sem_t *threadEmpty;
 } arg;
 
 // definition of the get_items function used to find the word in the files
@@ -116,7 +120,10 @@ int main( int argc, char *argv[]){
         return 0;
     }
 
-    while(1){
+    bool notExit = true;
+    char *ptr;
+
+    while(notExit){
         if(sem_wait(indicator) == -1){
             printf("Error waiting for indicator\n");
             return 0;
@@ -125,6 +132,10 @@ int main( int argc, char *argv[]){
         strcpy(str, queue->keywords[queue->startIndex]);
         queue->startIndex = (queue->startIndex + 1) % requiredQueueSize;
 
+        ptr = strstr(str, "exit");
+        if(ptr != NULL){
+            notExit = true;
+        }
         if(sem_post(count) == -1){
             printf("Error posting count\n");
             return 0;
@@ -148,6 +159,22 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
     DIR *dir;
     struct dirent *entry;
     struct stat stats;
+
+    sem_t *writerMutex, *empty, *full;
+
+    if((sem_init(writerMutex, 0, 0)) == SEM_FAILED){
+        perror("Initiating writerMutex failed\n");
+        return;
+    }
+
+    if((sem_init(empty, 0, 0)) == SEM_FAILED){
+        perror("Initializing empty failed\n");
+        return;
+    }
+
+    if((sem_init(full, 0, bufferSize)) == SEM_FAILED){
+        perror("Initiating full failed\n");
+    }
 
      // checks if directory can open
     if ((dir = opendir(filePath)) == NULL)
@@ -176,8 +203,10 @@ item* get_items(char filePath[MAX_DIR_PATH], char key[MAX_KEYWORD], int bufferSi
                     new_arg->filePath = filePath;
                     new_arg->key = key;
                     new_arg->b = b;
+                    new_arg->threadMutex = writerMutex;
+                    new_arg->threadFull = full;
+                    new_arg->threadEmpty = empty;
 
-                    
                     pthread_t tpid;
                     pthread_create(&tpid, NULL, find_lines, &new_arg);
                 }
@@ -219,8 +248,25 @@ void *find_lines(void* argument) {
             i->line = strdup(line);
             
         // TODO ADD SEMAPHORE HERE TO SEE IF BUFFER IS AT MAX CAPACITY
-        enqueue(args->b, i);
+            if(sem_wait(args->threadMutex) == SEM_FAILED){
+                perror("Waiting on threadMutex failed\n");
+            }
 
+            if(sem_wait(args->threadFull) == SEM_FAILED){
+                perror("Waiting on threadFull failed\n");
+            }
+
+            enqueue(args->b, i);
+
+            if(sem_post(args->threadEmpty) == SEM_FAILED){
+                perror("Posting threadEmpty failed\n");
+            }
+
+            if(sem_post(args->threadMutex) == SEM_FAILED){
+                perror("Posting threadMutex failed\n");
+            }
+
+            
         }
     }
 }
