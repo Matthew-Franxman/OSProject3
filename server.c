@@ -58,6 +58,13 @@ typedef struct Argument {
     int bufferSize;
 } arg;
 
+void get_items(void* argument);
+void find_lines(void* argument);
+void write_file(void* argument);
+void enqueue(buffer *b, item *i);
+item* dequeue(buffer *b);
+int isEmpty(buffer *b);
+
 int main( int argc, char *argv[]){
     if(argc != 3){
         printf("Invalid Command Line Arguments");
