@@ -42,7 +42,7 @@ typedef struct Item {
 typedef struct Buffer {
     item *head;
     item *tail;
-    int size;
+    int *size;
 } buffer;
 
 typedef struct Argument {
@@ -55,12 +55,12 @@ typedef struct Argument {
     sem_t *threadEmpty;
     sem_t *totalWrite;
     int *integ;
-    int bufferSize;
+    int *bufferSize;
 } arg;
 
-void get_items(void* argument);
-void find_lines(void* argument);
-void write_file(void* argument);
+void *get_items(void* argument);
+void *find_lines(void* argument);
+void *write_file(void* argument);
 void enqueue(buffer *b, item *i);
 item* dequeue(buffer *b);
 int isEmpty(buffer *b);
@@ -151,16 +151,18 @@ int main( int argc, char *argv[]){
         char delim[] = " ";
         char *ptr1 = strtok(str, delim);
         char *ptr2 = strtok(NULL, delim);
-        printf("Filepath is %s\n", ptr1);
+        char *str1 = malloc(sizeof(ptr1)+2);
+        strcat(str1, "./");
+        strcat(str1, ptr1);
+        printf("Filepath is %s\n", str1);
         printf("keyword is %s\n", ptr2);
 
-        new_arg->filePath = ptr1;
+        new_arg->filePath = str1;
         new_arg->key= ptr2;
-        new_arg->bufferSize = bufferSize;
+        new_arg->bufferSize = &bufferSize;
 
         pthread_t tid;
         pthread_create(&tid, NULL, get_items, new_arg);
-
     }
 
     if(sem_close(mutex) == -1)
@@ -190,13 +192,16 @@ int main( int argc, char *argv[]){
 
 // get_items finds when a string is found within a line and creates the respective items
 // returning the first item
-void get_items(void* argument) {
+void *get_items(void* argument) {
     arg *args = (struct Argument *)argument;
 
     int *integ =0;
 
     buffer *b;
-    b = (buffer *) malloc(sizeof(buffer));
+    b = malloc(sizeof(buffer));
+    b->size = malloc(sizeof(int));
+    *(b->size) = 0;
+    printf("ORIGINAL BUFFER SIZE IS %d\n", *(b->size));
     
 
     // file stuctures native to c
@@ -216,9 +221,12 @@ void get_items(void* argument) {
         perror("Initializing empty failed\n");
         
 
-    if((sem_init(full, 0, args->bufferSize)) == -1){
+    if((sem_init(full, 0, *(args->bufferSize))) == -1){
         perror("Initiating full failed\n");
     }
+
+    if(sem_post(writerMutex) == -1)
+        perror("posting mutex fail");
 
      // checks if directory can open
     if ((dir = opendir(args->filePath)) == NULL)
@@ -229,9 +237,12 @@ void get_items(void* argument) {
         
         // finds different entries in the directory
         while ((entry = readdir(dir)) != NULL){
-
+            if( entry->d_name[0] == '.'){
+                continue;
+            }
             //puts the path together
-            char path[1000];
+            char path[MAX_DIR_PATH];
+            
             strcpy(path, args->filePath);
             strcat(path, "/");
             strcat(path, entry->d_name);
@@ -244,7 +255,7 @@ void get_items(void* argument) {
                     arg * new_arg;
                     new_arg = (arg *) malloc(sizeof(arg));
                     new_arg->entry = entry;
-                    new_arg->filePath = args->filePath;
+                    new_arg->filePath = path;
                     new_arg->key = args->key;
                     new_arg->b = b;
                     new_arg->threadMutex = writerMutex;
@@ -254,58 +265,55 @@ void get_items(void* argument) {
                     integ++;
 
                     pthread_t tpid;
-                    pthread_create(&tpid, NULL, find_lines, &new_arg);
+                    pthread_create(&tpid, NULL, find_lines, new_arg);
                 }
             }
 
         }
         arg * new_arg;
-        new_arg = (arg *) malloc(sizeof(arg));
+        new_arg = malloc(sizeof(arg));
         new_arg->b = b;
 
         pthread_t wpid;
-        pthread_create(&wpid, NULL, write_file, &new_arg);
+        pthread_create(&wpid, NULL, write_file, new_arg);
 
         pthread_join(wpid, NULL);
 
     }
 
-    free(integ);
+    printf("DO WE EVER GET HERE\n");
     free(b);
     free(args);
+    return (void *)0;
 }
 
-void find_lines(void* argument) {
+void *find_lines(void* argument) {
     arg *args = (struct Argument *)argument;
-
-    char path[MAX_DIR_PATH];
-    strcpy(path, args->filePath);
-    strcat(path, "/");
-    strcat(path, args->entry->d_name);
-
     FILE *fp;
     char line[1024];
-    fp = fopen(path, "r+");
+    printf("CURRENT PATH IS %s\n", args->filePath);
+    fp = fopen(args->filePath, "r+");
+    
 
     int lineNum = 0;
-    while (fgets(line, MAX_LINE_SIZE, (FILE*)fp) != NULL) {
+    while (fgets(line, MAX_LINE_SIZE, fp) != NULL) {
         lineNum++;
         char *ptr = strstr(line, args->key);
 
         if (ptr != NULL) { // the string is found within the line
             // creation of the new item
-            item *i = NULL;
-            i = (item *) malloc(sizeof(item));
+            item *i;
+            i = malloc(sizeof(struct Item));
             i->filename = strdup(args->entry->d_name);
             i->lineNum = lineNum;
             i->line = strdup(line);
             
-            if(sem_wait(args->threadMutex) == -1){
-                perror("Waiting on threadMutex failed\n");
-            }
-
             if(sem_wait(args->threadFull) == -1){
                 perror("Waiting on threadFull failed\n");
+            }
+            
+            if(sem_wait(args->threadMutex) == -1){
+                perror("Waiting on threadMutex failed\n");
             }
 
             enqueue(args->b, i);
@@ -321,15 +329,18 @@ void find_lines(void* argument) {
             
         }
     }
+    fclose(fp);
     args->integ--;
-    free(args);
+    //free(args);
+    return (void *)0;
 }
 
-void write_file(void* argument) {
+void *write_file(void* argument) {
     
     arg *args = (struct Argument *)argument;
 
-    while(args->integ != 0 && dequeue(args->b) != NULL) {
+    while(args->integ != 0) {
+        printf("Trying to write TO FILE\n");
 
         if(sem_wait(args->threadEmpty) == -1)
             perror("Waiting for not empty failed\n");
@@ -341,12 +352,15 @@ void write_file(void* argument) {
             perror("Waiting on total write failed\n");
 
         item *i = dequeue(args->b);
+        printf("WRITING TO FILE\n");
 
         FILE *outFile;
 
-        outFile = fopen("output.txt", "w+");
+        outFile = fopen("./output.txt", "a+");
 
         fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
+
+        fclose(outFile);
 
         if(sem_post(args->threadFull) == -1)
             perror("posting thread full failed");
@@ -358,6 +372,7 @@ void write_file(void* argument) {
             perror("posting total write failed");
 
     }
+    return (void *)0;
 }
 
 // equeue adds an entry to the back of the buffer
@@ -365,12 +380,13 @@ void enqueue(buffer *b, item *i){
   if (isEmpty(b)){
     b->head = i;
     b->tail = i;
+    b->head->next = b->tail;
   }
   else {
     b->tail->next = i;
     b->tail = i;
   }
-  b->size = b->size +1;
+  *(b->size) = *(b->size) +1;
 }
 
 // dequeue pops the front item off of the buffer
@@ -380,16 +396,22 @@ item* dequeue(buffer *b) {
   if (isEmpty(b))
     return NULL;
 
+  printf("B SIZE IS %d\n", *(b->size));
+
   item *tmp;
+  item *tmp2;
   tmp = b->head;
-  if (b->head != b->tail)
-    b->head = b->head->next;
-  b->size = b->size -1; 
+  if (b->head != b->tail){
+    tmp2 = b->head->next;
+    b->head = tmp2;
+    printf("NEW B HEAD IS %s\n", b->head->line);
+  }
+  *(b->size) = *(b->size) - 1; 
 
   return tmp;
 }
 
 // isEmpty checks to see if the buffer is empty
 int isEmpty(buffer *b){
-  return (b->size == 0);
+  return (*(b->size) == 0);
 }
