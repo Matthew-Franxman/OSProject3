@@ -1,18 +1,7 @@
 # OSProject3
-This is the repo for OS Project 3 between Matthew Franxman and Thomas Cheal
+Thomas Cheal 5233790
+Matthew Franxman 5070929
 
-Thomas below I will add steps to teach you how to get this repo off the ground and running.
+We attempted to fully implement the program, all of the required features are in there, however it does not quite work as intended. We use file locking, multithreading, a bounded buffer, and shared memory. The program is able to successfully search through all of the files given an input file, mostly finding the correct lines that correspond to the keywords. The program seems to run a lot better when manually tested, as it gives a different but more correct output as opposed to when run through the blackbox test. It can be demonstrated that manual testing worked better than the black box testing for our files.
 
-First I think you should take a l;ook at this website for basic git commands:
-https://confluence.atlassian.com/bitbucketserver/basic-git-commands-776639767.html
-
-Secondly here are the steps that you need to do to make this work:
-1. Make sure you have git installed in your terminal (pretty sure it is but just use the snap command to install if not)
-2. Once you have done that, go to the main page and find the green code button on the right, then calling 'git clone xxxxxxxxx' where that is the copy and pasted name of the repo
-3. When working locally, pull down the master branch, however always work on your own branch. This means that you need to start by pulling down master and then creating a new branch off of master. NEVER PUSH ANYTHING UP TO MASTER UNLESS YOU GO THROUGH ME AND VICE VERSA. IT CAN SERIOUSLY MESS UP OUR REPO.
-4. The command for making your own branch ios in the cheat sheet, however i think its 'git branch -b xxxxxxxx'
-5. To push up to github you will need to run 'git add .' and then 'git commit -m "PUT A MESSAGE IN HERE"'
-6. To push it up, run 'git push origin xxxxxxxxx' where x is your branch's name.
-7. It SHOULD push up, and then you will need to mereg it into master, but I can handle that for now!
-
-If you have any questions about any of this, PLEASE let me know ASAP
+The shared memory region is a array of strings that is sized according to the maximum length of the possible data stored with a space in between. The data stored is the directory that needs to be searched through and the keyword that is being searched for. An array was used as it was easier to work with inside the given shared memory space.

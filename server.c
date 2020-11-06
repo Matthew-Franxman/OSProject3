@@ -141,25 +141,30 @@ int main( int argc, char *argv[]){
         ptr = strstr(str, "exit");
         if(ptr != NULL){
             notExit = true;
+            continue;
         }
         if(sem_post(count) == -1)
             perror("Error posting count\n");
             
         arg * new_arg;
-        new_arg = (arg *) malloc(sizeof(arg));
+        new_arg = malloc(sizeof(arg));
 
         char delim[] = " ";
         char *ptr1 = strtok(str, delim);
         char *ptr2 = strtok(NULL, delim);
-        char *str1 = malloc(sizeof(ptr1)+2);
-        strcat(str1, "./");
-        strcat(str1, ptr1);
-        printf("Filepath is %s\n", str1);
-        printf("keyword is %s\n", ptr2);
+        printf("MAIN Filepath is %s with keyword %s\n", ptr1, ptr2);
 
-        new_arg->filePath = str1;
-        new_arg->key= ptr2;
+        char *str2 = malloc(sizeof(ptr2) +2);
+        //printf("keyword is %s\n", str2);
+        str2[0] = ' ';
+        strcat(str2, ptr2);
+        strcat(str2, " ");
+        
+
+        new_arg->filePath = ptr1;
+        new_arg->key = str2;
         new_arg->bufferSize = &bufferSize;
+        new_arg->totalWrite = writeFile;
 
         pthread_t tid;
         pthread_create(&tid, NULL, get_items, new_arg);
@@ -195,14 +200,13 @@ int main( int argc, char *argv[]){
 void *get_items(void* argument) {
     arg *args = (struct Argument *)argument;
 
-    int *integ =0;
+    int *integ = malloc(sizeof(int));
+    *integ = 0;
 
     buffer *b;
     b = malloc(sizeof(buffer));
     b->size = malloc(sizeof(int));
     *(b->size) = 0;
-    printf("ORIGINAL BUFFER SIZE IS %d\n", *(b->size));
-    
 
     // file stuctures native to c
     DIR *dir;
@@ -225,13 +229,15 @@ void *get_items(void* argument) {
         perror("Initiating full failed\n");
     }
 
+
     if(sem_post(writerMutex) == -1)
         perror("posting mutex fail");
 
      // checks if directory can open
-    if ((dir = opendir(args->filePath)) == NULL)
+    if ((dir = opendir(args->filePath)) == NULL){
         perror("could not open directory");
-
+        printf("FAILED DIRECTORY OPEN IS %s\n", args->filePath);
+    }
 
     else {
         
@@ -251,7 +257,7 @@ void *get_items(void* argument) {
                 continue;
             else {
                 // if its a normal file
-                if (S_ISREG (stats.st_mode)){
+                if (S_ISREG (stats.st_mode) && !S_ISDIR (stats.st_mode) ){
                     arg * new_arg;
                     new_arg = (arg *) malloc(sizeof(arg));
                     new_arg->entry = entry;
@@ -262,8 +268,7 @@ void *get_items(void* argument) {
                     new_arg->threadFull = full;
                     new_arg->threadEmpty = empty;
                     new_arg->integ = integ;
-                    integ++;
-
+                    (*integ)++;
                     pthread_t tpid;
                     pthread_create(&tpid, NULL, find_lines, new_arg);
                 }
@@ -273,15 +278,33 @@ void *get_items(void* argument) {
         arg * new_arg;
         new_arg = malloc(sizeof(arg));
         new_arg->b = b;
+        new_arg->threadEmpty = empty;
+        new_arg->threadFull = full;
+        new_arg->threadMutex = writerMutex;
+        new_arg->totalWrite = args->totalWrite;
+        new_arg->integ = integ;
 
+        //printf("WHAT IS INTEG WHEN PASSED TO WRITER %d\n", *(integ));
         pthread_t wpid;
         pthread_create(&wpid, NULL, write_file, new_arg);
 
+        while(*integ != 0){
+            continue;
+        }
+        item *k = malloc(sizeof(item));
+        k->line = strdup("$quiT");
+        enqueue(b, k);
+
+        if(sem_post(empty) == -1){
+                perror("Posting threadEmpty failed\n");
+        }
+
+        
         pthread_join(wpid, NULL);
 
     }
+    //printf("DONE WITH ONE KEYWORD\n");
 
-    printf("DO WE EVER GET HERE\n");
     free(b);
     free(args);
     return (void *)0;
@@ -291,14 +314,25 @@ void *find_lines(void* argument) {
     arg *args = (struct Argument *)argument;
     FILE *fp;
     char line[1024];
-    printf("CURRENT PATH IS %s\n", args->filePath);
-    fp = fopen(args->filePath, "r+");
+    fp = fopen(args->filePath, "r");
+    printf("Thread opened is %s with keyword %s\n", args->filePath, args->key);
+
+    if(fp == NULL){
+        printf("NULL FILE PATH IS %s\n", args->filePath);
+        pthread_exit((void *)-1);
+    }
     
 
     int lineNum = 0;
     while (fgets(line, MAX_LINE_SIZE, fp) != NULL) {
         lineNum++;
-        char *ptr = strstr(line, args->key);
+        char *newLine = malloc( strlen(line) +10);
+        newLine[0] = ' ';
+        strcat(newLine, line);
+        newLine[strlen(newLine)-1] = ' ';
+        char *ptr = strstr(newLine, args->key);
+        //printf("CURRENT LINE IS %s with keyword%s\n", newLine, args->key);
+
 
         if (ptr != NULL) { // the string is found within the line
             // creation of the new item
@@ -307,6 +341,8 @@ void *find_lines(void* argument) {
             i->filename = strdup(args->entry->d_name);
             i->lineNum = lineNum;
             i->line = strdup(line);
+
+            //printf("WE FOUND %s in %s", i->line, args->filePath);
             
             if(sem_wait(args->threadFull) == -1){
                 perror("Waiting on threadFull failed\n");
@@ -316,7 +352,9 @@ void *find_lines(void* argument) {
                 perror("Waiting on threadMutex failed\n");
             }
 
+            //printf("LINE BEING ADDED IS %s", line);
             enqueue(args->b, i);
+            //printf("SUCCESSFUL ENQUEUE\n");
 
             if(sem_post(args->threadEmpty) == -1){
                 perror("Posting threadEmpty failed\n");
@@ -328,9 +366,10 @@ void *find_lines(void* argument) {
 
             
         }
+        free(newLine);
     }
     fclose(fp);
-    args->integ--;
+    (*(args->integ))--;
     //free(args);
     return (void *)0;
 }
@@ -338,9 +377,16 @@ void *find_lines(void* argument) {
 void *write_file(void* argument) {
     
     arg *args = (struct Argument *)argument;
+    int *avalue = malloc(sizeof(int));
+    sem_getvalue(args->threadEmpty, avalue);
+    //printf("WHY ARE YOU WRITING %d with %d things left in the buffer\n", *(args->integ), *avalue);
+    int *svalue = malloc(sizeof(int));
 
-    while(args->integ != 0) {
-        printf("Trying to write TO FILE\n");
+    while(*(args->integ) != 0 || *avalue != 0) {
+        sem_getvalue(args->threadEmpty, svalue);
+        //printf("Trying to write TO FILE %d with # processes %d\n", *svalue, *(args->integ));
+        if(*svalue == 0)
+            continue;
 
         if(sem_wait(args->threadEmpty) == -1)
             perror("Waiting for not empty failed\n");
@@ -352,15 +398,19 @@ void *write_file(void* argument) {
             perror("Waiting on total write failed\n");
 
         item *i = dequeue(args->b);
-        printf("WRITING TO FILE\n");
+        if(strcmp(i->line, "$quiT") != 0){
+            //printf("WRITING TO FILE\n");
 
-        FILE *outFile;
-
-        outFile = fopen("./output.txt", "a+");
-
-        fprintf(outFile, "%s:%d:%s\n", i->filename, i->lineNum, i->line);
-
-        fclose(outFile);
+            FILE *outFile;
+            outFile = fopen("./output.txt", "a+");
+            fprintf(outFile, "%s:%d:%s", i->filename, i->lineNum, i->line);
+            fclose(outFile);
+        }
+        else{
+            //printf("$quiT\n");
+        }
+        
+        //free(i);
 
         if(sem_post(args->threadFull) == -1)
             perror("posting thread full failed");
@@ -371,7 +421,10 @@ void *write_file(void* argument) {
         if(sem_post(args->totalWrite) == -1)
             perror("posting total write failed");
 
+        sem_getvalue(args->threadEmpty, avalue);
+
     }
+    printf("EXIT YOU IDIOT\n");
     return (void *)0;
 }
 
@@ -387,6 +440,7 @@ void enqueue(buffer *b, item *i){
     b->tail = i;
   }
   *(b->size) = *(b->size) +1;
+  //printf("THE SIZE IS %d\n", *(b->size));
 }
 
 // dequeue pops the front item off of the buffer
@@ -396,7 +450,7 @@ item* dequeue(buffer *b) {
   if (isEmpty(b))
     return NULL;
 
-  printf("B SIZE IS %d\n", *(b->size));
+  //printf("B SIZE IS %d\n", *(b->size));
 
   item *tmp;
   item *tmp2;
@@ -404,7 +458,6 @@ item* dequeue(buffer *b) {
   if (b->head != b->tail){
     tmp2 = b->head->next;
     b->head = tmp2;
-    printf("NEW B HEAD IS %s\n", b->head->line);
   }
   *(b->size) = *(b->size) - 1; 
 
